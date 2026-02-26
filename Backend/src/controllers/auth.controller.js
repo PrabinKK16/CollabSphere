@@ -5,6 +5,7 @@ import validateEmail from "../utils/ValidateEmail.js";
 import ApiResponse from "../utils/ApiResponse.js";
 import { generateRefreshToken } from "../utils/generateRefreshToken.js";
 import { generateAccessToken } from "./../utils/generateAccessToken.js";
+import jwt from "jsonwebtoken";
 
 const cookieOptions = () => ({
   httpOnly: true,
@@ -140,7 +141,52 @@ export const logout = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, {}, "User logout successfully."));
 });
 
-export const refreshAccessToken = asyncHandler(async (req, res) => {});
+export const refreshAccessToken = asyncHandler(async (req, res) => {
+  const incomingRefreshToken = req.cookies.refreshToken;
+
+  if (!incomingRefreshToken) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  try {
+    const decodedToken = jwt.verify(
+      incomingRefreshToken,
+      process.env.REFRESH_TOKEN_SECRET
+    );
+
+    const user = await User.findById(decodedToken?._id);
+
+    if (!user) {
+      throw new ApiError(401, "Unauthorized");
+    }
+
+    if (!user.refreshToken) {
+      throw new ApiError(401, "Refresh token revoked");
+    }
+
+    if (incomingRefreshToken !== user?.refreshToken) {
+      throw new ApiError(401, "Refresh token is expired or used");
+    }
+
+    const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user);
+    user.refreshToken = refreshToken;
+    await user.save({ validateBeforeSave: false });
+
+    return res
+      .status(200)
+      .cookie("refreshToken", refreshToken, cookieOptions())
+      .json(
+        new ApiResponse(
+          200,
+          { accessToken },
+          "Access token refreshed successfully"
+        )
+      );
+  } catch (error) {
+    throw new ApiError(401, "Invalid refresh token");
+  }
+});
 
 export const getCurrentUser = asyncHandler(async (req, res) => {
   const user = req.user;
@@ -193,5 +239,11 @@ export const changePassword = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .clearCookie("refreshToken", cookieOptions())
-    .json(new ApiResponse(200, {}, "Password updated successfully. Please login again."));
+    .json(
+      new ApiResponse(
+        200,
+        {},
+        "Password updated successfully. Please login again."
+      )
+    );
 });
