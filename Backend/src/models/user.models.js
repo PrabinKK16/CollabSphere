@@ -23,21 +23,24 @@ const userSchema = new mongoose.Schema(
       unique: true,
       lowercase: true,
       trim: true,
-      index: true, 
+      index: true,
     },
     password: {
       type: String,
       required: true,
-      select: false, 
+      select: false,
     },
     avatar: {
       type: String,
     },
     refreshToken: {
-      type: String, 
-    }
+      type: String,
+    },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    versionKey: false,
+  }
 );
 
 userSchema.pre("save", async function (next) {
@@ -47,9 +50,9 @@ userSchema.pre("save", async function (next) {
   next();
 });
 
-userSchema.methods.isPasswordCorrect = async function(password) {
+userSchema.methods.isPasswordCorrect = async function (password) {
   return await bcrypt.compare(password, this.password);
-}
+};
 
 const User = mongoose.model("User", userSchema);
 export default User;

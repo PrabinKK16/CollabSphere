@@ -43,11 +43,11 @@ export const createWorkspace = asyncHandler(async (req, res) => {
     slug,
     owner: userId,
     members: [
-        {
-            user: userId, 
-            role: "owner", 
-            joinedAt: new Date(), 
-        }
+      {
+        user: userId,
+        role: "owner",
+        joinedAt: new Date(),
+      },
     ],
     createdBy: userId,
   });
@@ -56,5 +56,51 @@ export const createWorkspace = asyncHandler(async (req, res) => {
     .status(201)
     .json(
       new ApiResponse(201, { workspace }, "Workspace created successfully")
+    );
+});
+
+export const getUserWorkspaces = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  const workspaces = await Workspace.find({
+    "members.user": userId,
+    isArchived: false,
+  }).sort({ createdAt: -1 });
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, { workspaces }, "Workspaces fetched successfully")
+    );
+});
+
+export const getWorkspaceBySlug = asyncHandler(async (req, res) => {
+  const { slug = "" } = req.params;
+  const userId = req.user?._id;
+
+  if (!slug.trim()) {
+    throw new ApiError(400, "Workspace slug is required");
+  }
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  const workspace = await Workspace.find({
+    slug: slug.trim().toLowerCase(),
+    isArchived: false,
+    "members.user": userId,
+  });
+  if (!workspace) {
+    throw new ApiResponse(404, "Workspace not found or access denied");
+  }
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, { workspace }, "Workspace fetched successfully")
     );
 });
