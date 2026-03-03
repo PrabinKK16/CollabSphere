@@ -229,11 +229,10 @@ export const inviteMember = asyncHandler(async (req, res) => {
         role: { $in: ["owner", "admin"] },
       },
     },
-  },
-);
+  });
 
   if (!workspace) {
-    throw new ApiError(404, "Workspace not found");
+    throw new ApiError(404, "Workspace not found or access denied");
   }
 
   const targetUser = await User.findOne({
@@ -274,4 +273,122 @@ export const inviteMember = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .json(new ApiResponse(200, {}, "Invitation sent successfully"));
+});
+
+export const acceptInvite = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  const { slug = "" } = req.params;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  if (!slug.trim()) {
+    throw new ApiError(400, "Workspace slug is required");
+  }
+
+  const workspace = await Workspace.findOneAndUpdate(
+    {
+      slug: slug.trim().toLowerCase(),
+      isArchived: false,
+      members: {
+        $elemMatch: {
+          user: userId,
+          status: "pending",
+        },
+      },
+    },
+    {
+      $set: {
+        "members.$.status": "accepted",
+        "members.$.joinedAt": new Date(),
+      },
+    },
+    { new: true }
+  );
+
+  if (!workspace) {
+    throw new ApiError(404, "Workspace not found or already processed");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Invitation accepted successfully"));
+});
+
+export const rejectInvite = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  const { slug = "" } = req.params;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  if (!slug.trim()) {
+    throw new ApiError(400, "Workspace slug is required");
+  }
+
+  const workspace = await Workspace.findOneAndUpdate(
+    {
+      slug: slug.trim().toLowerCase(),
+      isArchived: false,
+      members: {
+        $elemMatch: {
+          user: userId,
+          status: "pending",
+        },
+      },
+    },
+    {
+      $set: {
+        "members.$.status": "rejected",
+      },
+    },
+    { new: true }
+  );
+
+  if (!workspace) {
+    throw new ApiError(404, "Workspace not found or already processed");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Invitation rejected successfully"));
+});
+
+export const getMyInvites = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  const workspaces = await Workspace.find(
+    {
+      isArchived: false,
+      members: {
+        $elemMatch: {
+          user: userId,
+          status: "pending",
+        },
+      },
+    },
+    {
+      name: 1,
+      slug: 1,
+      members: {
+        $elemMatch: { user: userId },
+      },
+    }
+  ).sort({ createdAt: -1 });
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        { invites: workspaces },
+        "Invitations fetched successfully"
+      )
+    );
 });
