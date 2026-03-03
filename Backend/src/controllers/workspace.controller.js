@@ -3,7 +3,9 @@ import ApiResponse from "../utils/ApiResponse.js";
 import ApiError from "../utils/ApiError.js";
 import Workspace from "../models/workspace.models.js";
 import { generateSlug } from "../utils/generateSlug.js";
-import { hasWorkspacePermission } from "../utils/hasWorkspacePermission.js";
+import User from "../models/user.models.js";
+
+const WORKSPACE_ROLES = ["owner", "admin", "member", "guest"];
 
 export const createWorkspace = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
@@ -33,7 +35,7 @@ export const createWorkspace = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Invalid workspace name");
   }
 
-  const existing = await Workspace.findOne({ slug });
+  const existing = await Workspace.findOne({ slug, isArchived: false });
   if (existing) {
     throw new ApiError(409, "Workspace with this name already exists");
   }
@@ -47,6 +49,7 @@ export const createWorkspace = asyncHandler(async (req, res) => {
       {
         user: userId,
         role: "owner",
+        status: "accepted",
         joinedAt: new Date(),
       },
     ],
@@ -67,8 +70,13 @@ export const getUserWorkspaces = asyncHandler(async (req, res) => {
   }
 
   const workspaces = await Workspace.find({
-    "members.user": userId,
     isArchived: false,
+    members: {
+      $elemMatch: {
+        user: userId,
+        status: "accepted",
+      },
+    },
   }).sort({ createdAt: -1 });
 
   return res
@@ -90,13 +98,19 @@ export const getWorkspaceBySlug = asyncHandler(async (req, res) => {
     throw new ApiError(401, "Unauthorized");
   }
 
-  const workspace = await Workspace.find({
+  const workspace = await Workspace.findOne({
     slug: slug.trim().toLowerCase(),
     isArchived: false,
-    "members.user": userId,
+    members: {
+      $elemMatch: {
+        user: userId,
+        status: "accepted",
+      },
+    },
   });
+
   if (!workspace) {
-    throw new ApiResponse(404, "Workspace not found or access denied");
+    throw new ApiError(404, "Workspace not found or access denied");
   }
 
   return res
@@ -119,23 +133,20 @@ export const updateWorkspace = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Workspace slug is required");
   }
 
-  const workspace = await Workspace.find({
+  const workspace = await Workspace.findOne({
     slug: slug.trim().toLowerCase(),
     isArchived: false,
-    "member.user": userId,
+    members: {
+      $elemMatch: {
+        user: userId,
+        status: "accepted",
+        role: { $in: ["owner", "admin"] },
+      },
+    },
   });
 
   if (!workspace) {
     throw new ApiError(404, "Workspace not found or access denied");
-  }
-
-  const hasPermission = hasWorkspacePermission(workspace, userId, [
-    "owner",
-    "admin",
-  ]);
-
-  if (!hasPermission) {
-    throw new ApiError(403, "Forbidden");
   }
 
   if (name !== undefined) {
@@ -159,7 +170,11 @@ export const updateWorkspace = asyncHandler(async (req, res) => {
       throw new ApiError(400, "Invalid workspace name");
     }
 
-    const existing = await Workspace.findOne({ slug: newSlug });
+    const existing = await Workspace.findOne({
+      slug: newSlug,
+      isArchived: false,
+    });
+
     if (existing && existing._id.toString() !== workspace._id.toString()) {
       throw new ApiError(409, "Workspace name already in use");
     }
@@ -181,10 +196,10 @@ export const updateWorkspace = asyncHandler(async (req, res) => {
     );
 });
 
-export const addMember = asyncHandler(async (req, res) => {
+export const inviteMember = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
   const { slug = "" } = req.params;
-  const { email, role = "member" } = req.body;
+  let { identifier = "", role = "member" } = req.body;
 
   if (!userId) {
     throw new ApiError(401, "Unauthorized");
@@ -194,22 +209,69 @@ export const addMember = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Workspace slug is required");
   }
 
-  const workspace = await Workspace.find({
+  identifier = identifier.trim().toLowerCase();
+
+  if (!identifier) {
+    throw new ApiError(400, "User identifier is required");
+  }
+
+  if (!WORKSPACE_ROLES.includes(role)) {
+    throw new ApiError(400, "Invalid role");
+  }
+
+  const workspace = await Workspace.findOne({
     slug: slug.trim().toLowerCase(),
     isArchived: false,
-    "members.user": userId,
-  });
+    members: {
+      $elemMatch: {
+        user: userId,
+        status: "accepted",
+        role: { $in: ["owner", "admin"] },
+      },
+    },
+  },
+);
 
   if (!workspace) {
-    throw new ApiError(404, "Workspace not found or access denied");
+    throw new ApiError(404, "Workspace not found");
   }
 
-  const hasPermission = hasWorkspacePermission(workspace, userId, [
-    "owner",
-    "admin",
-  ]);
+  const targetUser = await User.findOne({
+    $or: [{ email: identifier }, { userName: identifier }],
+  });
 
-  if (!hasPermission) {
-    throw new ApiError(403, "Forbidden");
+  if (!targetUser) {
+    throw new ApiError(404, "User not found");
   }
+
+  if (targetUser._id.toString() === userId.toString()) {
+    throw new ApiError(400, "You cannot invite yourself");
+  }
+
+  const existingMember = workspace.members.find(
+    (m) => m.user.toString() === targetUser._id.toString()
+  );
+
+  if (existingMember) {
+    if (existingMember.status !== "rejected") {
+      throw new ApiError(409, "User is already invited or a member");
+    }
+
+    existingMember.status = "pending";
+    existingMember.role = role;
+    existingMember.invitedBy = userId;
+  } else {
+    workspace.members.push({
+      user: targetUser._id,
+      role,
+      status: "pending",
+      invitedBy: userId,
+    });
+  }
+
+  await workspace.save();
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Invitation sent successfully"));
 });

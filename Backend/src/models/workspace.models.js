@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 
-const WORKSPACE_ROLES = ["owner", "admin", "member", "guest"];
+const WORKSPACE_ROLES         = ["owner", "admin", "member", "guest"];
+const WORKSPACE_INVITE_STATUS = ["pending", "accepted", "rejected"];
 
 const memberSchema = new mongoose.Schema(
   {
@@ -21,6 +22,11 @@ const memberSchema = new mongoose.Schema(
     invitedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
+    },
+    status: {
+      type: String,
+      enum: WORKSPACE_INVITE_STATUS,
+      default: "pending",
     },
   },
   { _id: false }
