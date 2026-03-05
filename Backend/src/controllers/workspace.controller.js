@@ -475,3 +475,48 @@ export const removeMember = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, {}, "Member removed successfully"));
 });
+
+export const leaveWorkspace = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  const { slug = "" } = req.params;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  if (!slug.trim()) {
+    throw new ApiError(400, "Workspace slug is required");
+  }
+
+  const workspace = await Workspace.findOneAndUpdate(
+    {
+      slug: slug.trim().toLowerCase(),
+      isArchived: false,
+      members: {
+        $elemMatch: {
+          user: userId,
+          status: "accepted",
+          role: { $in: ["admin", "member", "guest"] },
+        },
+      },
+    },
+    {
+      $pull: {
+        members: { user: userId },
+      },
+    },
+    { new: false, projection: { _id: 1 } }
+  );
+
+  if (!workspace) {
+    throw new ApiError(404, "No workspace found or access denied");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "User left workspace successfully"));
+});
+
+export const changeMemberRole = asyncHandler(async (req, res) => {});
+
+export const transferOwnership = asyncHandler(async (req, res) => {});
