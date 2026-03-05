@@ -4,6 +4,7 @@ import ApiError from "../utils/ApiError.js";
 import Workspace from "../models/workspace.models.js";
 import { generateSlug } from "../utils/generateSlug.js";
 import User from "../models/user.models.js";
+import mongoose from "mongoose";
 
 const WORKSPACE_ROLES = ["owner", "admin", "member", "guest"];
 
@@ -391,4 +392,79 @@ export const getMyInvites = asyncHandler(async (req, res) => {
         "Invitations fetched successfully"
       )
     );
+});
+
+export const removeMember = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  const { slug = "" } = req.params;
+  const { targetUserId } = req.body;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  if (!slug.trim()) {
+    throw new ApiError(400, "Workspace slug is required");
+  }
+
+  if (!targetUserId) {
+    throw new ApiError(400, "Target user ID is required");
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(targetUserId)) {
+    throw new ApiError(400, "Invalid user ID");
+  }
+
+  const workspace = await Workspace.findOne({
+    slug: slug.trim().toLowerCase(),
+    isArchived: false,
+  });
+
+  if (!workspace) {
+    throw new ApiError(404, "Workspace not found");
+  }
+
+  const requester = workspace.members.find(
+    (m) => m.user.toString() === userId.toString() && m.status === "accepted"
+  );
+
+  if (!requester) {
+    throw new ApiError(403, "Access denied");
+  }
+
+  const targetMember = workspace.members.find(
+    (m) =>
+      m.user.toString() === targetUserId.toString() && m.status === "accepted"
+  );
+
+  if (!targetMember) {
+    throw new ApiError(404, "Member not found in workspace");
+  }
+
+  if (targetMember.role === "owner") {
+    throw new ApiError(400, "Owner cannot be removed");
+  }
+
+  if (requester.role === "admin") {
+    if (targetMember.role === "admin") {
+      throw new ApiError(403, "Admin cannot remove another admin");
+    }
+  }
+
+  if (!["owner", "admin"].includes(requester.role)) {
+    throw new ApiError(403, "You do not have the permission to remove members");
+  }
+
+  await Workspace.updateOne(
+    { _id: workspace._id },
+    {
+      $pull: {
+        members: { user: targetUserId },
+      },
+    }
+  );
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Member removed successfully"));
 });
