@@ -415,6 +415,13 @@ export const removeMember = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Invalid user ID");
   }
 
+  if (targetUserId.toString() === userId.toString()) {
+    throw new ApiError(
+      400,
+      "You cannot remove yourshelf. Use leave workspace instead."
+    );
+  }
+
   const workspace = await Workspace.findOne({
     slug: slug.trim().toLowerCase(),
     isArchived: false,
