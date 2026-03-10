@@ -7,6 +7,7 @@ import User from "../models/user.models.js";
 import mongoose from "mongoose";
 
 const WORKSPACE_ROLES = ["owner", "admin", "member", "guest"];
+const LEAVABLE_ROLES = ["admin", "member", "guest"];
 
 export const createWorkspace = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
@@ -496,7 +497,7 @@ export const leaveWorkspace = asyncHandler(async (req, res) => {
         $elemMatch: {
           user: userId,
           status: "accepted",
-          role: { $in: ["admin", "member", "guest"] },
+          role: { $in: LEAVABLE_ROLES },
         },
       },
     },
@@ -519,4 +520,72 @@ export const leaveWorkspace = asyncHandler(async (req, res) => {
 
 export const changeMemberRole = asyncHandler(async (req, res) => {});
 
-export const transferOwnership = asyncHandler(async (req, res) => {});
+export const transferOwnership = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  const { slug = "" } = req.params;
+  const { targetUserId } = req.body;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  if (!slug.trim()) {
+    throw new ApiError(400, "Workspace slug is required");
+  }
+
+  if (!targetUserId) {
+    throw new ApiError(400, "Target user ID is required");
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(targetUserId)) {
+    throw new ApiError(400, "Invalid user ID");
+  }
+
+  if (targetUserId.toString() === userId.toString()) {
+    throw new ApiError(400, "You are already the owner");
+  }
+
+  const workspace = await Workspace.findOne({
+    slug: slug.trim().toLowerCase(),
+    isArchived: false,
+    "members.user": userId,
+  });
+
+  if (!workspace) {
+    throw new ApiError(404, "Workspace not found or access denied");
+  }
+
+  const requester = workspace.members.find(
+    (m) =>
+      m.user.toString() === userId.toString() &&
+      m.status === "accepted" &&
+      m.role === "owner"
+  );
+
+  if (!requester) {
+    throw new ApiError(403, "Only the workspace owner can transfer ownership");
+  }
+
+  const targetMember = workspace.members.find(
+    (m) =>
+      m.user.toString() === targetUserId.toString() && m.status === "accepted"
+  );
+
+  if (!targetMember) {
+    throw new ApiError(404, "Member not found in workspace");
+  }
+
+  if (targetMember.role === "owner") {
+    throw new ApiError(400, "User is already the owner");
+  }
+
+  targetMember.role = "owner";
+  requester.role = "admin";
+  await workspace.save();
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Ownership transferred successfully"));
+});
+
+export const archiveWorkspace = asyncHandler(async (req, res) => {});
