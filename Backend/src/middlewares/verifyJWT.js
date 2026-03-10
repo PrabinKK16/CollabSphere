@@ -1,7 +1,7 @@
 import User from "../models/user.models.js";
 import ApiError from "../utils/ApiError.js";
 import asyncHandler from "../utils/asyncHandler.js";
-import jwt from 'jsonwebtoken';
+import jwt from "jsonwebtoken";
 
 export const verifyJWT = asyncHandler(async (req, _, next) => {
   const authHeader = req.headers.authorization;
@@ -20,7 +20,9 @@ export const verifyJWT = asyncHandler(async (req, _, next) => {
     throw new ApiError(401, "Invalid or expired token");
   }
 
-  const user = await User.findById(decoded._id).select("-password -refreshToken");
+  const user = await User.findById(decoded._id).select(
+    "-password -refreshToken"
+  );
 
   if (!user) {
     throw new ApiError(401, "Invalid token");
