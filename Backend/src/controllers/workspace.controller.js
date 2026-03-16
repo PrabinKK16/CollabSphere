@@ -679,4 +679,47 @@ export const transferOwnership = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, {}, "Ownership transferred successfully"));
 });
 
-export const archiveWorkspace = asyncHandler(async (req, res) => {});
+export const archiveWorkspace = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  const { slug = "" } = req.params;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  if (!slug.trim()) {
+    throw new ApiError(400, "Workspace slug is required");
+  }
+
+  const workspace = await Workspace.findOne({
+    slug: slug.trim().toLowerCase(),
+    isArchived: false,
+    "members.user": userId,
+  });
+
+  if (!workspace) {
+    throw new ApiError(404, "Workspace not found or access denied");
+  }
+
+  const requester = workspace.members.find(
+    (m) =>
+      m.user.toString() === userId.toString() &&
+      m.status === "accepted" &&
+      m.role === "owner"
+  );
+
+  if (!requester) {
+    throw new ApiError(
+      403,
+      "Only the workspace owner can archive the workspace"
+    );
+  }
+
+  workspace.isArchived = true;
+
+  await workspace.save();
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Workspace archived successfully"));
+});
