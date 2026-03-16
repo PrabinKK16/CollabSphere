@@ -518,7 +518,98 @@ export const leaveWorkspace = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, {}, "User left workspace successfully"));
 });
 
-export const changeMemberRole = asyncHandler(async (req, res) => {});
+export const updateMemberRole = asyncHandler(async (req, res) => {
+  const userId = req.user?._id;
+  const { slug = "" } = req.params;
+  const { targetUserId, newRole } = req.body;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  if (!slug.trim()) {
+    throw new ApiError(400, "Workspace slug is required");
+  }
+
+  if (!targetUserId) {
+    throw new ApiError(400, "Target user ID is required");
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(targetUserId)) {
+    throw new ApiError(400, "Invalid user ID");
+  }
+
+  if (!newRole) {
+    throw new ApiError(400, "New role is required");
+  }
+
+  if (!WORKSPACE_ROLES.includes(newRole)) {
+    throw new ApiError(400, "Invalid role");
+  }
+
+  if (newRole === "owner") {
+    throw new ApiError(400, "Ownership transfer must be done separately");
+  }
+
+  if (targetUserId.toString() === userId.toString()) {
+    throw new ApiError(400, "You cannot change your own role");
+  }
+
+  const workspace = await Workspace.findOne({
+    slug: slug.trim().toLowerCase(),
+    isArchived: false,
+    "members.user": userId,
+  });
+
+  if (!workspace) {
+    throw new ApiError(404, "Workspace not found or access denied");
+  }
+
+  const requester = workspace.members.find(
+    (m) => m.user.toString() === userId.toString() && m.status === "accepted"
+  );
+
+  if (!requester) {
+    throw new ApiError(403, "Access denied");
+  }
+
+  const targetMember = workspace.members.find(
+    (m) =>
+      m.user.toString() === targetUserId.toString() && m.status === "accepted"
+  );
+
+  if (!targetMember) {
+    throw new ApiError(404, "Member not found in workspace");
+  }
+
+  if (targetMember.role === "owner") {
+    throw new ApiError(403, "Owner role cannot be modified");
+  }
+
+  if (targetMember.role === newRole) {
+    throw new ApiError(400, "User already has this role");
+  }
+
+  if (
+    requester.role === "admin" &&
+    targetMember.role !== "member" &&
+    targetMember.role !== "guest"
+  ) {
+    throw new ApiError(403, "Admin cannot modify this role");
+  }
+
+  if (!["owner", "admin"].includes(requester.role)) {
+    throw new ApiError(403, "You do not have permission to change roles");
+  }
+
+  targetMember.role = newRole;
+
+  await workspace.save();
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Member role updated successfully"));
+});
 
 export const transferOwnership = asyncHandler(async (req, res) => {
   const userId = req.user?._id;
