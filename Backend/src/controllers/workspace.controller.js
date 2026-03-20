@@ -547,7 +547,7 @@ export const removeMember = asyncHandler(async (req, res) => {
     workspace: workspace._id,
     action: "member_removed",
     performedBy: userId,
-    targetUser: targetUser._id,
+    targetUser: targetUserId,
   });
 
   return res
