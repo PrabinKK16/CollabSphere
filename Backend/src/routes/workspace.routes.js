@@ -15,6 +15,7 @@ import {
   updateMemberRole,
   transferOwnership,
 } from "../controllers/workspace.controller.js";
+import { getWorkspaceActivity } from "../controllers/activity.controller.js";
 
 const router = Router();
 
@@ -23,6 +24,7 @@ router.use(verifyJWT);
 router.get("/invites/me", getMyInvites);
 router.post("/", createWorkspace);
 router.get("/", getUserWorkspaces);
+router.get("/:slug/activity", getWorkspaceActivity);
 router.get("/:slug", getWorkspaceBySlug);
 router.patch("/:slug", updateWorkspace);
 router.patch("/:slug/archive", archiveWorkspace);

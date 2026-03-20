@@ -5,6 +5,7 @@ import Workspace from "../models/workspace.models.js";
 import { generateSlug } from "../utils/generateSlug.js";
 import User from "../models/user.models.js";
 import mongoose from "mongoose";
+import { createActivityLog } from "../utils/createActivityLog.js";
 
 const WORKSPACE_ROLES = ["owner", "admin", "member", "guest"];
 const LEAVABLE_ROLES = ["admin", "member", "guest"];
@@ -56,6 +57,12 @@ export const createWorkspace = asyncHandler(async (req, res) => {
       },
     ],
     createdBy: userId,
+  });
+
+  await createActivityLog({
+    workspace: workspace._id,
+    action: "workspace_created",
+    performedBy: userId,
   });
 
   return res
@@ -238,6 +245,12 @@ export const archiveWorkspace = asyncHandler(async (req, res) => {
 
   await workspace.save();
 
+  await createActivityLog({
+    workspace: workspace._id,
+    action: "workspace_archived",
+    performedBy: userId,
+  });
+
   return res
     .status(200)
     .json(new ApiResponse(200, {}, "Workspace archived successfully"));
@@ -317,6 +330,13 @@ export const inviteMember = asyncHandler(async (req, res) => {
 
   await workspace.save();
 
+  await createActivityLog({
+    workspace: workspace._id,
+    action: "member_invited",
+    performedBy: userId,
+    targetUser: targetUser._id,
+  });
+
   return res
     .status(200)
     .json(new ApiResponse(200, {}, "Invitation sent successfully"));
@@ -357,6 +377,12 @@ export const acceptInvite = asyncHandler(async (req, res) => {
   if (!workspace) {
     throw new ApiError(404, "Workspace not found or already processed");
   }
+
+  await createActivityLog({
+    workspace: workspace._id,
+    action: "member_joined",
+    performedBy: userId,
+  });
 
   return res
     .status(200)
@@ -517,6 +543,13 @@ export const removeMember = asyncHandler(async (req, res) => {
     }
   );
 
+  await createActivityLog({
+    workspace: workspace._id,
+    action: "member_removed",
+    performedBy: userId,
+    targetUser: targetUser._id,
+  });
+
   return res
     .status(200)
     .json(new ApiResponse(200, {}, "Member removed successfully"));
@@ -651,6 +684,14 @@ export const updateMemberRole = asyncHandler(async (req, res) => {
 
   await workspace.save();
 
+  await createActivityLog({
+    workspace: workspace._id,
+    action: "role_updated",
+    performedBy: userId,
+    targetUser: targetUserId,
+    meta: { newRole },
+  });
+
   return res
     .status(200)
     .json(new ApiResponse(200, {}, "Member role updated successfully"));
@@ -718,6 +759,13 @@ export const transferOwnership = asyncHandler(async (req, res) => {
   targetMember.role = "owner";
   requester.role = "admin";
   await workspace.save();
+
+  await createActivityLog({
+    workspace: workspace._id,
+    action: "ownership_transferred",
+    performedBy: userId,
+    targetUser: targetUserId,
+  });
 
   return res
     .status(200)
