@@ -6,6 +6,7 @@ import { generateSlug } from "../utils/generateSlug.js";
 import User from "../models/user.models.js";
 import mongoose from "mongoose";
 import { createActivityLog } from "../utils/createActivityLog.js";
+import { getPagination } from "../utils/pagination.js";
 
 const WORKSPACE_ROLES = ["owner", "admin", "member", "guest"];
 const LEAVABLE_ROLES = ["admin", "member", "guest"];
@@ -78,7 +79,9 @@ export const getUserWorkspaces = asyncHandler(async (req, res) => {
     throw new ApiError(401, "Unauthorized");
   }
 
-  const workspaces = await Workspace.find({
+  const { page, limit, skip } = getPagination(req);
+
+  const query = {
     isArchived: false,
     members: {
       $elemMatch: {
@@ -86,13 +89,29 @@ export const getUserWorkspaces = asyncHandler(async (req, res) => {
         status: "accepted",
       },
     },
-  }).sort({ createdAt: -1 });
+  };
 
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(200, { workspaces }, "Workspaces fetched successfully")
-    );
+  const [workspaces, total] = await Promise.all([
+    Workspace.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+
+    Workspace.countDocuments(query),
+  ]);
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        workspaces,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+      },
+      "Workspaces fetched successfully"
+    )
+  );
 });
 
 export const getWorkspaceBySlug = asyncHandler(async (req, res) => {
@@ -197,6 +216,12 @@ export const updateWorkspace = asyncHandler(async (req, res) => {
   }
 
   await workspace.save();
+
+  await createActivityLog({
+    workspace: workspace._id,
+    action: "workspace_updated",
+    performedBy: userId,
+  });
 
   return res
     .status(200)
@@ -436,34 +461,46 @@ export const getMyInvites = asyncHandler(async (req, res) => {
     throw new ApiError(401, "Unauthorized");
   }
 
-  const workspaces = await Workspace.find(
-    {
-      isArchived: false,
-      members: {
-        $elemMatch: {
-          user: userId,
-          status: "pending",
-        },
+  const { page, limit, skip } = getPagination(req);
+
+  const query = {
+    isArchived: false,
+    members: {
+      $elemMatch: {
+        user: userId,
+        status: "pending",
       },
     },
-    {
+  };
+
+  const [workspaces, total] = await Promise.all([
+    Workspace.find(query, {
       name: 1,
       slug: 1,
-      members: {
-        $elemMatch: { user: userId },
-      },
-    }
-  ).sort({ createdAt: -1 });
+      members: { $elemMatch: { user: userId } },
+    })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit),
 
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(
-        200,
-        { invites: workspaces },
-        "Invitations fetched successfully"
-      )
-    );
+    Workspace.countDocuments(query),
+  ]);
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        invites: workspaces,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+      },
+      "Invitations fetched successfully"
+    )
+  );
 });
 
 export const removeMember = asyncHandler(async (req, res) => {
@@ -590,6 +627,13 @@ export const leaveWorkspace = asyncHandler(async (req, res) => {
   if (!workspace) {
     throw new ApiError(404, "No workspace found or access denied");
   }
+
+  await createActivityLog({
+    workspace: workspace._id,
+    action: "member_removed",
+    performedBy: userId,
+    targetUser: userId,
+  });
 
   return res
     .status(200)

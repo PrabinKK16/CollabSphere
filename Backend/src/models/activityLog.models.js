@@ -43,6 +43,7 @@ const activityLogSchema = new mongoose.Schema(
 );
 
 activityLogSchema.index({ workspace: 1, createdAt: -1 });
+activityLogSchema.index({ performedBy: 1 });
 
 const ActivityLog = mongoose.model("ActivityLog", activityLogSchema);
 
