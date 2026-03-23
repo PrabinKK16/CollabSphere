@@ -36,27 +36,26 @@ export const getWorkspaceActivity = asyncHandler(async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .populate("performedBy", "userName email")
-      .populate("targetUser", "userName email"),
+      .populate("performedBy", "userName")
+      .populate("targetUser", "userName")
+      .lean(),
 
     ActivityLog.countDocuments({ workspace: workspace._id }),
   ]);
 
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(
-        200,
-        {
-          logs,
-          pagination: {
-            total,
-            page,
-            limit,
-            totalPages: Math.ceil(total / limit),
-          },
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        logs,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
         },
-        "Activity fetched successfully"
-      )
-    );
+      },
+      "Activity fetched successfully"
+    )
+  );
 });

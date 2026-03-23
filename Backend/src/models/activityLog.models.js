@@ -7,6 +7,7 @@ const ACTIVITY_TYPES = [
   "member_invited",
   "member_joined",
   "member_removed",
+  "member_left",
   "role_updated",
   "ownership_transferred",
 ];
@@ -44,6 +45,7 @@ const activityLogSchema = new mongoose.Schema(
 
 activityLogSchema.index({ workspace: 1, createdAt: -1 });
 activityLogSchema.index({ performedBy: 1 });
+activityLogSchema.index({ workspace: 1, action: 1 });
 
 const ActivityLog = mongoose.model("ActivityLog", activityLogSchema);
 

@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-const WORKSPACE_ROLES         = ["owner", "admin", "member", "guest"];
+const WORKSPACE_ROLES = ["owner", "admin", "member", "guest"];
 const WORKSPACE_INVITE_STATUS = ["pending", "accepted", "rejected"];
 
 const memberSchema = new mongoose.Schema(
@@ -75,6 +75,8 @@ const workspaceSchema = new mongoose.Schema(
 
 workspaceSchema.index({ "members.user": 1 });
 workspaceSchema.index({ owner: 1, isArchived: 1 });
+workspaceSchema.index({ "members.user": 1, "members.status": 1 });
+workspaceSchema.index({ _id: 1, "members.user": 1 }, { unique: true });
 
 const Workspace = mongoose.model("Workspace", workspaceSchema);
 export default Workspace;

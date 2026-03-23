@@ -7,6 +7,9 @@ import User from "../models/user.models.js";
 import mongoose from "mongoose";
 import { createActivityLog } from "../utils/createActivityLog.js";
 import { getPagination } from "../utils/pagination.js";
+import { buildWorkspaceQuery } from "../utils/queryBuilder.js";
+import { getSort } from "../utils/sortBuilder.js";
+import { createNotification } from "../utils/createNotification.js";
 
 const WORKSPACE_ROLES = ["owner", "admin", "member", "guest"];
 const LEAVABLE_ROLES = ["admin", "member", "guest"];
@@ -80,19 +83,11 @@ export const getUserWorkspaces = asyncHandler(async (req, res) => {
   }
 
   const { page, limit, skip } = getPagination(req);
-
-  const query = {
-    isArchived: false,
-    members: {
-      $elemMatch: {
-        user: userId,
-        status: "accepted",
-      },
-    },
-  };
+  const query = buildWorkspaceQuery(req, userId);
+  const sort = getSort(req.query.sort);
 
   const [workspaces, total] = await Promise.all([
-    Workspace.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+    Workspace.find(query).sort(sort).skip(skip).limit(limit),
 
     Workspace.countDocuments(query),
   ]);
@@ -245,7 +240,12 @@ export const archiveWorkspace = asyncHandler(async (req, res) => {
   const workspace = await Workspace.findOne({
     slug: slug.trim().toLowerCase(),
     isArchived: false,
-    "members.user": userId,
+    members: {
+      $elemMatch: {
+        user: userId,
+        status: "accepted",
+      },
+    },
   });
 
   if (!workspace) {
@@ -337,23 +337,62 @@ export const inviteMember = asyncHandler(async (req, res) => {
   );
 
   if (existingMember) {
-    if (existingMember.status !== "rejected") {
-      throw new ApiError(409, "User is already invited or a member");
+    if (existingMember.status === "accepted") {
+      throw new ApiError(409, "User is already a member");
     }
 
-    existingMember.status = "pending";
-    existingMember.role = role;
-    existingMember.invitedBy = userId;
-  } else {
-    workspace.members.push({
-      user: targetUser._id,
-      role,
-      status: "pending",
-      invitedBy: userId,
-    });
+    if (existingMember.status === "pending") {
+      throw new ApiError(409, "Invitation already sent");
+    }
+
+    if (existingMember.status === "rejected") {
+      existingMember.status = "pending";
+      existingMember.role = role;
+      existingMember.invitedBy = userId;
+
+      await workspace.save();
+
+      await createActivityLog({
+        workspace: workspace._id,
+        action: "member_reinvited",
+        performedBy: userId,
+        targetUser: targetUser._id,
+      });
+
+      await createNotification({
+        user: targetUser._id,
+        type: "invite_received",
+        message: `${req.user.userName} invited you`,
+        workspace: workspace._id,
+        triggeredBy: userId,
+      });
+
+      return res
+        .status(200)
+        .json(new ApiResponse(200, {}, "Invitation re-sent successfully"));
+    }
   }
 
-  await workspace.save();
+  const updateResult = await Workspace.updateOne(
+    {
+      _id: workspace._id,
+      "members.user": { $ne: targetUser._id },
+    },
+    {
+      $push: {
+        members: {
+          user: targetUser._id,
+          role,
+          status: "pending",
+          invitedBy: userId,
+        },
+      },
+    }
+  );
+
+  if (updateResult.modifiedCount === 0) {
+    throw new ApiError(409, "User is already invited or a member");
+  }
 
   await createActivityLog({
     workspace: workspace._id,
@@ -407,6 +446,12 @@ export const acceptInvite = asyncHandler(async (req, res) => {
     workspace: workspace._id,
     action: "member_joined",
     performedBy: userId,
+  });
+
+  await createNotification({
+    user: workspace.owner,
+    type: "invite_accepted",
+    message: "User joined workspace",
   });
 
   return res
@@ -527,13 +572,19 @@ export const removeMember = asyncHandler(async (req, res) => {
   if (targetUserId.toString() === userId.toString()) {
     throw new ApiError(
       400,
-      "You cannot remove yourshelf. Use leave workspace instead."
+      "You cannot remove yourself. Use leave workspace instead."
     );
   }
 
   const workspace = await Workspace.findOne({
     slug: slug.trim().toLowerCase(),
     isArchived: false,
+    members: {
+      $elemMatch: {
+        user: userId,
+        status: "accepted",
+      },
+    },
   });
 
   if (!workspace) {
@@ -621,7 +672,7 @@ export const leaveWorkspace = asyncHandler(async (req, res) => {
         members: { user: userId },
       },
     },
-    { new: false, projection: { _id: 1 } }
+    { new: true, projection: { _id: 1 } }
   );
 
   if (!workspace) {
@@ -630,7 +681,7 @@ export const leaveWorkspace = asyncHandler(async (req, res) => {
 
   await createActivityLog({
     workspace: workspace._id,
-    action: "member_removed",
+    action: "member_left",
     performedBy: userId,
     targetUser: userId,
   });
@@ -680,7 +731,13 @@ export const updateMemberRole = asyncHandler(async (req, res) => {
   const workspace = await Workspace.findOne({
     slug: slug.trim().toLowerCase(),
     isArchived: false,
-    "members.user": userId,
+    members: {
+      $elemMatch: {
+        user: userId,
+        status: "accepted",
+        role: { $in: ["owner", "admin"] },
+      },
+    },
   });
 
   if (!workspace) {
@@ -766,52 +823,77 @@ export const transferOwnership = asyncHandler(async (req, res) => {
     throw new ApiError(400, "You are already the owner");
   }
 
-  const workspace = await Workspace.findOne({
-    slug: slug.trim().toLowerCase(),
-    isArchived: false,
-    "members.user": userId,
-  });
+  const session = await mongoose.startSession();
 
-  if (!workspace) {
-    throw new ApiError(404, "Workspace not found or access denied");
+  try {
+    session.startTransaction();
+
+    const workspace = await Workspace.findOne({
+      slug: slug.trim().toLowerCase(),
+      isArchived: false,
+      members: {
+        $elemMatch: {
+          user: userId,
+          status: "accepted",
+          role: "owner",
+        },
+      },
+    }).session(session);
+
+    if (!workspace) {
+      throw new ApiError(404, "Workspace not found or access denied");
+    }
+
+    const requester = workspace.members.find(
+      (m) =>
+        m.user.toString() === userId.toString() &&
+        m.status === "accepted" &&
+        m.role === "owner"
+    );
+
+    if (!requester) {
+      throw new ApiError(
+        403,
+        "Only the workspace owner can transfer ownership"
+      );
+    }
+
+    const targetMember = workspace.members.find(
+      (m) =>
+        m.user.toString() === targetUserId.toString() && m.status === "accepted"
+    );
+
+    if (!targetMember) {
+      throw new ApiError(404, "Member not found in workspace");
+    }
+
+    if (targetMember.role === "owner") {
+      throw new ApiError(400, "User is already the owner");
+    }
+
+    targetMember.role = "owner";
+    requester.role = "admin";
+    workspace.owner = targetUserId;
+
+    await workspace.save({ session });
+
+    await createActivityLog({
+      workspace: workspace._id,
+      action: "ownership_transferred",
+      performedBy: userId,
+      targetUser: targetUserId,
+      session,
+    });
+
+    await session.commitTransaction();
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, {}, "Ownership transferred successfully"));
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
   }
-
-  const requester = workspace.members.find(
-    (m) =>
-      m.user.toString() === userId.toString() &&
-      m.status === "accepted" &&
-      m.role === "owner"
-  );
-
-  if (!requester) {
-    throw new ApiError(403, "Only the workspace owner can transfer ownership");
-  }
-
-  const targetMember = workspace.members.find(
-    (m) =>
-      m.user.toString() === targetUserId.toString() && m.status === "accepted"
-  );
-
-  if (!targetMember) {
-    throw new ApiError(404, "Member not found in workspace");
-  }
-
-  if (targetMember.role === "owner") {
-    throw new ApiError(400, "User is already the owner");
-  }
-
-  targetMember.role = "owner";
-  requester.role = "admin";
-  await workspace.save();
-
-  await createActivityLog({
-    workspace: workspace._id,
-    action: "ownership_transferred",
-    performedBy: userId,
-    targetUser: targetUserId,
-  });
-
-  return res
-    .status(200)
-    .json(new ApiResponse(200, {}, "Ownership transferred successfully"));
 });

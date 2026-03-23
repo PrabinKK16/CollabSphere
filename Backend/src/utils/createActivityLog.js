@@ -6,16 +6,24 @@ export const createActivityLog = async ({
   performedBy,
   targetUser = null,
   meta = {},
+  session = null,
 }) => {
+  const payload = {
+    workspace,
+    action,
+    performedBy,
+    targetUser,
+    meta,
+  };
+
   try {
-    await ActivityLog.create({
-      workspace,
-      action,
-      performedBy,
-      targetUser,
-      meta,
-    });
+    if (session) {
+      await ActivityLog.create([payload], { session });
+    } else {
+      await ActivityLog.create(payload);
+    }
   } catch (error) {
     console.error("ActivityLog error: ", error.message);
+    throw error;
   }
 };
