@@ -1,7 +1,7 @@
 import asyncHandler from "../utils/asyncHandler.js";
 import ApiError from "../utils/ApiError.js";
 import User from "../models/user.models.js";
-import validateEmail from "../utils/ValidateEmail.js";
+import { validateEmail } from "../utils/ValidateEmail.js";
 import ApiResponse from "../utils/ApiResponse.js";
 import { generateRefreshToken } from "../utils/generateRefreshToken.js";
 import { generateAccessToken } from "./../utils/generateAccessToken.js";
