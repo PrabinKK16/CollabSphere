@@ -15,6 +15,7 @@ const columnSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
+      lowercase: true,
       maxLength: [50, "Column name must not exceed 50 characters"],
     },
     order: {

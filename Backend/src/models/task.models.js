@@ -162,7 +162,7 @@ const taskSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
-    isArchieved: {
+    isArchived: {
       type: Boolean,
       default: false,
     },
