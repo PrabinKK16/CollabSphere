@@ -123,7 +123,7 @@ userSchema.methods.generateEmailVerificationToken = function () {
   return rawToken;
 };
 
-userSchema.methods.generatePasswordVerificationToken = function () {
+userSchema.methods.generatePasswordResetToken = function () {
   const rawToken = crypto.randomBytes(32).toString("hex");
   this.passwordResetToken = crypto
     .createHash("sha256")
