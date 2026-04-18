@@ -5,7 +5,10 @@ export const createNotification = async ({
   type,
   message,
   workspace = null,
+  board = null,
+  task = null,
   triggeredBy = null,
+  meta = {},
 }) => {
   try {
     await Notification.create({
@@ -13,7 +16,10 @@ export const createNotification = async ({
       type,
       message,
       workspace,
+      board,
+      task,
       triggeredBy,
+      meta,
     });
   } catch (error) {
     console.error("Notification error: ", error.message);

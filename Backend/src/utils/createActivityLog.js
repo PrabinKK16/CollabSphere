@@ -4,6 +4,8 @@ export const createActivityLog = async ({
   workspace,
   action,
   performedBy,
+  board = null,
+  task = null,
   targetUser = null,
   meta = {},
   session = null,
@@ -12,6 +14,8 @@ export const createActivityLog = async ({
     workspace,
     action,
     performedBy,
+    board,
+    task,
     targetUser,
     meta,
   };
