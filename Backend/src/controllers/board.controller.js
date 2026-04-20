@@ -259,3 +259,184 @@ export const archiveBoard = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, {}, "Board archived successfully"));
 });
+
+export const addColumn = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+  const { slug, boardId } = req.params;
+  let { name = "", color, wipLimit, isCompletionColumn } = req.body;
+
+  name = name.trim();
+  if (!name) {
+    throw new ApiError(400, "Column name is required");
+  }
+  if (name.length > 50) {
+    throw new ApiError(400, "Column name can not exceed 50 characters");
+  }
+
+  const workspace = await getWorkspaceForUser(slug, userId, [
+    "owner",
+    "admin",
+    "member",
+  ]);
+
+  const board = await Board.findOne({
+    _id: boardId,
+    workspace: workspace._id,
+    isArchived: false,
+  });
+
+  if (!board) {
+    throw new ApiError(404, "Board not found");
+  }
+
+  const activeColumns = board.columns.filter((c) => !c.isArchived);
+
+  if (activeColumns.length >= 20) {
+    throw new ApiError(400, "A board cannot have more than 20 columns");
+  }
+
+  const maxOrder = activeColumns.reduce(
+    (max, col) => Math.max(max, col.order),
+    -1
+  );
+
+  board.columns.push({
+    name,
+    order: maxOrder + 1,
+    color: color || "#94a3b8",
+    createdBy: userId,
+    wipLimit: wipLimit || null,
+    isCompletionColumn: isCompletionColumn || false,
+  });
+
+  await board.save();
+
+  const newColumn = board.columns[board.columns.length - 1];
+
+  return res
+    .status(201)
+    .json(
+      new ApiResponse(201, { column: newColumn }, "Column added successfully")
+    );
+});
+
+export const updateColumn = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+  const { slug, boardId, columnId } = req.params;
+  let { name, color, wipLimit, isCompletionColumn } = req.body;
+
+  const workspace = await getWorkspaceForUser(slug, userId, [
+    "owner",
+    "admin",
+    "member",
+  ]);
+
+  const board = await Board.findOne({
+    _id: boardId,
+    workspace: workspace._id,
+    isArchived: false,
+  });
+
+  if (!board) {
+    throw new ApiError(404, "Board not found");
+  }
+
+  const column = board.columns.id(columnId);
+  if (!column || column.isArchived) {
+    throw new ApiError(404, "Column not found");
+  }
+
+  if (name !== undefined) {
+    name = name.trim();
+    if (!name) {
+      throw new ApiError(400, "Column name cannot be empty");
+    }
+    if (name.length > 50) {
+      throw new ApiError(400, "Column name must not exceed 50 characters");
+    }
+    column.name = name;
+  }
+
+  if (color !== undefined) column.color = color;
+  if (wipLimit !== undefined) column.wipLimit = wipLimit;
+  if (isCompletionColumn !== undefined)
+    column.isCompletionColumn = isCompletionColumn;
+
+  await board.save();
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { column }, "Column updated successfully"));
+});
+
+export const reorderColumns = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+  const { slug, boardId } = req.params;
+  const { orderedColumnIds = [] } = req.body;
+
+  if (!Array.isArray(orderedColumnIds) || orderedColumnIds.length === 0) {
+    throw new ApiError(400, "orderedColumnIds must be a non-empty array");
+  }
+
+  const workspace = await getWorkspaceForUser(slug, userId, [
+    "owner",
+    "admin",
+    "member",
+  ]);
+
+  const board = await Board.findOne({
+    _id: boardId,
+    workspace: workspace._id,
+    isArchived: false,
+  });
+
+  if (!board) {
+    throw new ApiError(404, "Board not found");
+  }
+
+  orderedColumnIds.forEach((colId, index) => {
+    const column = board.columns.id(colId);
+    if (column && !column.isArchived) {
+      column.order = index;
+    }
+  });
+
+  await board.save();
+
+  const sortedColumns = board.columns
+    .filter((c) => !c.isArchived)
+    .sort((a, b) => a.order - b.order);
+
+   return res
+    .status(200)
+    .json(new ApiResponse(200, { columns: sortedColumns }, "Columns reordered successfully"));
+});
+
+export const archiveColumn = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+  const { slug, boardId, columnId } = req.params;
+
+  const workspace = await getWorkspaceForUser(slug, userId, ["owner", "admin"]);
+
+  const board = await Board.findOne({
+    _id: boardId,
+    workspace: workspace._id,
+    isArchived: false,
+  });
+
+  if (!board) {
+    throw new ApiError(404, "Board not found");
+  }
+
+  const column = board.columns.id(columnId);
+  if (!column || column.isArchived) {
+    throw new ApiError(404, "Column not found");
+  }
+
+  column.isArchived = true;
+  await board.save();
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Column archived successfully"));
+});
