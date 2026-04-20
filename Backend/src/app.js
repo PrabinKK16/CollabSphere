@@ -5,6 +5,7 @@ import errorHandler from "./middlewares/error.middleware.js";
 import authRoutes from "./routes/auth.routes.js";
 import workspaceRoutes from "./routes/workspace.routes.js";
 import notificationRoutes from "./routes/notification.routes.js";
+import boardRoutes from "./routes/board.routes.js";
 
 const app = express();
 
@@ -23,6 +24,7 @@ app.use(cookieParser());
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/workspaces", workspaceRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
+app.use("/api/v1/workspaces/:slug/boards", boardRoutes);
 
 app.use(errorHandler);
 

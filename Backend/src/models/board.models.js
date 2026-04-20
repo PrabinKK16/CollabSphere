@@ -93,6 +93,11 @@ const boardSchema = new mongoose.Schema(
       maxLength: [8, "Emoji must be a single emoji character"],
       trim: true,
     },
+    color: {
+      type: String,
+      default: "#6366f1",
+      match: [/^#([A-Fa-f0-9]{6})$/, "Color must be a valid hex color"],
+    },
     columns: {
       type: [columnSchema],
       default: [],

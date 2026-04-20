@@ -12,6 +12,7 @@ export const ACTIVITY_TYPES = [
   "role_updated",
   "ownership_transferred",
   "board_created",
+  "board_archived",
   "board_updated",
   "board_deleted",
   "task_created",
