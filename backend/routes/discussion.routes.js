@@ -1,0 +1,11 @@
+import express from 'express';
+const router = express.Router();
+import { createDiscussion, getDiscussions, getDiscussion, updateDiscussion, deleteDiscussion } from '../controllers/discussion.controller.js';
+import { protect } from '../middlewares/auth.js';
+router.use(protect);
+router.post('/', createDiscussion);
+router.get('/', getDiscussions);
+router.get('/:discussionId', getDiscussion);
+router.put('/:discussionId', updateDiscussion);
+router.delete('/:discussionId', deleteDiscussion);
+export default router;

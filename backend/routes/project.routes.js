@@ -1,0 +1,13 @@
+import express from 'express';
+const router = express.Router();
+import { createProject, getProjects, getProject, updateProject, archiveProject, deleteProject, addProjectMember } from '../controllers/project.controller.js';
+import { protect } from '../middlewares/auth.js';
+router.use(protect);
+router.post('/', createProject);
+router.get('/workspace/:workspaceId', getProjects);
+router.get('/:projectId', getProject);
+router.put('/:projectId', updateProject);
+router.put('/:projectId/archive', archiveProject);
+router.delete('/:projectId', deleteProject);
+router.post('/:projectId/members', addProjectMember);
+export default router;

@@ -1,0 +1,11 @@
+import express from 'express';
+const router = express.Router();
+import { createComment, getComments, updateComment, deleteComment, addReaction } from '../controllers/comment.controller.js';
+import { protect } from '../middlewares/auth.js';
+router.use(protect);
+router.post('/', createComment);
+router.get('/', getComments);
+router.put('/:commentId', updateComment);
+router.delete('/:commentId', deleteComment);
+router.post('/:commentId/reactions', addReaction);
+export default router;

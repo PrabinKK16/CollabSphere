@@ -1,0 +1,14 @@
+import express from 'express';
+const router = express.Router();
+import { createTask, getTasks, getTask, updateTask, updateTaskStatus, deleteTask, getKanbanTasks, updateChecklist } from '../controllers/task.controller.js';
+import { protect } from '../middlewares/auth.js';
+router.use(protect);
+router.post('/', createTask);
+router.get('/project/:projectId', getTasks);
+router.get('/project/:projectId/kanban', getKanbanTasks);
+router.get('/:taskId', getTask);
+router.put('/:taskId', updateTask);
+router.patch('/:taskId/status', updateTaskStatus);
+router.patch('/:taskId/checklist', updateChecklist);
+router.delete('/:taskId', deleteTask);
+export default router;

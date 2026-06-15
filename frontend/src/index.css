@@ -1,0 +1,125 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap");
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans antialiased;
+  }
+  :root {
+    color-scheme: light;
+  }
+  .dark {
+    color-scheme: dark;
+  }
+}
+
+@layer components {
+  /* Base input - NO icon padding by default */
+  .input-field {
+    @apply w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700
+           bg-white dark:bg-slate-800
+           text-slate-900 dark:text-white
+           placeholder-slate-400 dark:placeholder-slate-500
+           focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent
+           transition-all duration-200 text-sm;
+  }
+
+  /* Use this wrapper class when you have a left icon */
+  .input-icon-wrapper {
+    @apply relative flex items-center;
+  }
+
+  .input-icon-wrapper .icon-left {
+    @apply absolute left-4 w-4 h-4 text-slate-400 pointer-events-none flex-shrink-0 z-10;
+  }
+
+  .input-icon-wrapper .icon-right {
+    @apply absolute right-4 w-4 h-4 text-slate-400 flex-shrink-0 z-10;
+  }
+
+  /* Input with left icon - extra left padding */
+  .input-with-icon {
+    @apply input-field pl-11;
+  }
+
+  .btn-primary {
+    @apply gradient-bg text-white font-semibold px-6 py-2.5 rounded-xl
+           hover:opacity-90 transition-all duration-200
+           hover:scale-[1.02] active:scale-[0.98]
+           shadow-lg shadow-emerald-500/20 cursor-pointer;
+  }
+
+  .btn-secondary {
+    @apply bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300
+           border border-slate-200 dark:border-slate-700 font-medium
+           px-6 py-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700
+           transition-all duration-200 cursor-pointer;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .sidebar-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl
+           text-slate-600 dark:text-slate-400
+           hover:bg-emerald-50 dark:hover:bg-emerald-950/30
+           hover:text-emerald-600 dark:hover:text-emerald-400
+           transition-all duration-200 cursor-pointer;
+  }
+
+  .sidebar-item.active {
+    @apply bg-emerald-50 dark:bg-emerald-950/40
+           text-emerald-600 dark:text-emerald-400 font-medium;
+  }
+
+  .card-hover {
+    @apply transition-all duration-300 hover:shadow-xl hover:-translate-y-1;
+  }
+
+  .page-bg {
+    @apply min-h-screen
+           bg-gradient-to-br from-emerald-50 via-cyan-50 to-white
+           dark:from-slate-950 dark:via-slate-900 dark:to-slate-950;
+  }
+}
+
+@layer utilities {
+  .gradient-text {
+    @apply bg-gradient-to-r from-emerald-600 via-teal-500 to-cyan-500 bg-clip-text text-transparent;
+  }
+  .gradient-bg {
+    @apply bg-gradient-to-r from-emerald-600 via-teal-500 to-cyan-500;
+  }
+  .glass {
+    @apply bg-white/60 backdrop-blur-xl border border-white/20;
+  }
+  .glass-dark {
+    @apply bg-slate-900/60 backdrop-blur-xl border border-emerald-900/30;
+  }
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #059669 transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 4px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: #059669;
+    border-radius: 20px;
+  }
+  .animate-delay-200 {
+    animation-delay: 200ms;
+  }
+  .animate-delay-400 {
+    animation-delay: 400ms;
+  }
+  .animate-delay-600 {
+    animation-delay: 600ms;
+  }
+}
